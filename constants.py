@@ -22,7 +22,7 @@ IGNORED = {
     "GeneratedPluginRegistrant.java", "GeneratedPluginRegistrant.swift",
     "GeneratedPluginRegistrant.h", "GeneratedPluginRegistrant.m",
     
-    # Node/JS (if using web)
+    # Node/JS
     "node_modules", ".yarn", ".turbo", "dist",
     "*.lock", "yarn.lock", "package-lock.json",
     
@@ -33,45 +33,24 @@ IGNORED = {
     # Environment
     ".env", ".env.local",
     
-    # Binary/Media that don't need review
+    # Binary/Media
     "*.png", "*.jpg", "*.jpeg", "*.ico", "*.jar",
-    "*.exe", "*.dll", "*.so", "*.dylib",
-    
-    # Specific Flutter files that are auto-generated
-    "flutter_export_environment.sh", "AppFrameworkInfo.plist",
-    "ephemeral", ".plugin_symlinks",
-    
-    # Gradle wrapper
+    "*.exe", "*.dll", "*.so", "*.dylib", "flutter_export_environment.sh",
+    "AppFrameworkInfo.plist", "ephemeral", ".plugin_symlinks",
     "gradle-wrapper.jar", "gradle-wrapper.properties",
     
-    # Xcode
+    # Xcode/Native
     "*.xcworkspace", "*.xcodeproj", "xcshareddata",
     "IDEWorkspaceChecks.plist", "WorkspaceSettings.xcsettings",
-    
-    # Test/Example directories in plugins
     "test_driver", "integration_test",
-    
-    # Native build files
     "*.rc", "*.manifest", "runner.exe.manifest",
-    
-    # CMake
     "CMakeLists.txt", "*.cmake",
+    "migrate.py", "history.json", "update_id.py",
 }
 
-# Directories to completely skip (never traverse into)
 SKIP_DIRS = {
-    ".dart_tool",
-    ".gradle",
-    ".idea",
-    "build",
-    "ephemeral",
-    ".plugin_symlinks",
-    "Pods",
-    "node_modules",
-    "__pycache__",
-    ".git",
-    "linux/flutter/ephemeral",
-    "windows/flutter/ephemeral",
-    "macos/Flutter/ephemeral",
-    "ios/Flutter/ephemeral",
+    ".dart_tool", ".gradle", ".idea", "build", "ephemeral",
+    ".plugin_symlinks", "Pods", "node_modules", "__pycache__", ".git",
+    "linux/flutter/ephemeral", "windows/flutter/ephemeral",
+    "macos/Flutter/ephemeral", "ios/Flutter/ephemeral",
 }

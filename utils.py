@@ -1,23 +1,56 @@
 import os
 from constants import IGNORED, SKIP_DIRS
 
+FILTER_SETTINGS = {
+    "show_hidden": False,
+    "custom_ignored": set(),
+    "temp_visible": set(),
+    "temp_ignored": set(),
+}
+
 def match_ignore(name, is_dir=False):
-    """Check if a file/folder should be ignored"""
-    # Check if directory should be completely skipped
+    if name in FILTER_SETTINGS["temp_visible"]:
+        return False
+    
+    if name in FILTER_SETTINGS["temp_ignored"]:
+        return True
+    
+    if name in FILTER_SETTINGS["custom_ignored"]:
+        return True
+
+    if name.startswith("."):
+        if FILTER_SETTINGS["show_hidden"]:
+            if name in {".git", ".idea", ".vscode"}:
+                return True
+            return False
+        else:
+            return True
+
     if is_dir and name in SKIP_DIRS:
         return True
     
     for pattern in IGNORED:
-        # Exact match
         if name == pattern:
             return True
-        # Wildcard extension match
         if pattern.startswith("*") and name.endswith(pattern[1:]):
             return True
+            
     return False
 
+def get_recursive_files(directory):
+    file_paths = []
+    try:
+        for root, dirs, files in os.walk(directory):
+            dirs[:] = [d for d in dirs if not match_ignore(d, is_dir=True)]
+            
+            for file in files:
+                if not match_ignore(file, is_dir=False):
+                    file_paths.append(os.path.join(root, file))
+    except PermissionError:
+        pass
+    return file_paths
+
 def generate_tree_text(root):
-    """Generate a clean text representation with filtering"""
     tree = []
     
     def walk(dir_path, prefix=""):
@@ -26,7 +59,6 @@ def generate_tree_text(root):
         except PermissionError:
             return
         
-        # Filter out ignored items
         filtered_items = []
         for item in items:
             full_path = os.path.join(dir_path, item)
