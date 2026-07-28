@@ -1,4 +1,5 @@
 import os
+import re
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtGui import QCursor
 from PyQt6.QtCore import Qt
@@ -51,3 +52,54 @@ def copy_project_tree(parent_widget, root_folder):
         clipboard = QApplication.clipboard()
         clipboard.setText(tree_text)
         QMessageBox.information(parent_widget, "Copied", "Project tree copied to clipboard!")
+
+def create_project_from_tree(base_path, tree_text):
+    """Parses an ASCII tree and creates the corresponding files and folders."""
+    stack = [(-1, base_path)]
+    
+    # Strip markdown codeblocks if accidentally copied from LLM
+    tree_text = re.sub(r'```[a-zA-Z]*\n', '', tree_text)
+    tree_text = tree_text.replace('```', '')
+
+    for line in tree_text.splitlines():
+        if not line.strip():
+            continue
+            
+        # Find the actual filename starting index (ignoring visual tree characters and spaces)
+        match = re.search(r'[^\s│├└─]', line)
+        if not match:
+            continue
+            
+        indent = match.start()
+        name = line[indent:].strip()
+        
+        is_dir = name.endswith('/')
+        name = name.rstrip('/')
+        
+        if not name:
+            continue
+        
+        # Pop stack to find the correct parent directory based on indentation
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+            
+        parent_path = stack[-1][1]
+        
+        # If the parent was previously created as a file (e.g., missing trailing slash heuristic),
+        # convert it into a directory now that we know it has children!
+        if os.path.isfile(parent_path):
+            os.remove(parent_path)
+            os.makedirs(parent_path, exist_ok=True)
+            
+        full_path = os.path.join(parent_path, name)
+        
+        if is_dir:
+            os.makedirs(full_path, exist_ok=True)
+        else:
+            # Ensure the parent exists, then create the empty file
+            os.makedirs(parent_path, exist_ok=True)
+            if not os.path.exists(full_path):
+                with open(full_path, 'a', encoding='utf-8') as f:
+                    pass
+                    
+        stack.append((indent, full_path))

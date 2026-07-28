@@ -2,16 +2,53 @@ import os
 from PyQt6.QtWidgets import (
     QWidget, QTreeWidget, QTreeWidgetItem, QTextEdit, QSplitter,
     QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog,
-    QToolBar, QMessageBox, QLineEdit, QLabel, QMenu, QSizePolicy
+    QToolBar, QMessageBox, QLineEdit, QLabel, QMenu, QSizePolicy, QDialog
 )
 from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from tree_builder import build_tree
 from utils import get_recursive_files, FILTER_SETTINGS
-from file_ops import copy_files_to_clipboard, copy_project_tree, read_file_content
+from file_ops import copy_files_to_clipboard, copy_project_tree, read_file_content, create_project_from_tree
 from project_watcher import ProjectWatcher
 from ignore_manager import IgnoreManagerWindow 
+
+class ScaffoldDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create Project from Tree")
+        self.resize(600, 500)
+        
+        layout = QVBoxLayout(self)
+        
+        label = QLabel("Paste your folder structure (ASCII tree) below:")
+        label.setStyleSheet("color: #ccc; font-weight: bold;")
+        layout.addWidget(label)
+        
+        self.text_edit = QTextEdit()
+        self.text_edit.setPlaceholderText("app/\n ├── main.py\n ├── view/\n │    └── main_window.py\n...")
+        self.text_edit.setStyleSheet("background: #1e1e1e; color: #eee; font-family: Consolas, monospace; border: 1px solid #444;")
+        self.text_edit.setAcceptRichText(False)
+        layout.addWidget(self.text_edit)
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        
+        btn_cancel = QPushButton("Cancel")
+        btn_cancel.clicked.connect(self.reject)
+        btn_cancel.setStyleSheet("background-color: #555; padding: 5px 15px; color: white;")
+        
+        btn_create = QPushButton("✨ Generate Structure")
+        btn_create.clicked.connect(self.accept)
+        btn_create.setStyleSheet("background-color: #2E7D32; color: white; font-weight: bold; padding: 5px 20px;")
+        
+        btn_layout.addWidget(btn_cancel)
+        btn_layout.addWidget(btn_create)
+        
+        layout.addLayout(btn_layout)
+        
+    def get_text(self):
+        return self.text_edit.toPlainText()
 
 class ProjectPanel(QWidget):
     close_requested = pyqtSignal(object)
@@ -37,16 +74,13 @@ class ProjectPanel(QWidget):
         self.watcher.file_changed.connect(self.handle_file_change)
         self.watcher.directory_changed.connect(self.reload_tree)
 
-        # 1. Create the widgets first so they exist for the toolbar to use
         self.create_widgets()
-        # 2. Setup the UI layout
         self.setup_ui()
 
         if default_folder and os.path.isdir(default_folder):
             self.load_project(default_folder)
 
     def create_widgets(self):
-        """Initialize all main components before layout"""
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True) 
         self.tree.setSelectionMode(QTreeWidget.SelectionMode.ExtendedSelection)
@@ -72,19 +106,24 @@ class ProjectPanel(QWidget):
         toolbar = QToolBar()
         toolbar.setMovable(False)
         
-        # Workspace Controls
         add_act = QAction("➕", self)
         add_act.setToolTip("Split/Add View")
         add_act.triggered.connect(lambda: self.add_requested.emit())
         toolbar.addAction(add_act)
 
         browse_act = QAction("📁", self)
+        browse_act.setToolTip("Open Folder")
         browse_act.triggered.connect(self.browse_folder)
         toolbar.addAction(browse_act)
         
+        # --- NEW SCAFFOLD BUTTON ---
+        scaffold_act = QAction("🏗", self)
+        scaffold_act.setToolTip("Create Project from Text Tree")
+        scaffold_act.triggered.connect(self.scaffold_project)
+        toolbar.addAction(scaffold_act)
+        
         toolbar.addSeparator()
 
-        # Connections to already created widgets
         self.search_bar.textChanged.connect(self.filter_tree)
         toolbar.addWidget(self.search_bar)
 
@@ -138,7 +177,6 @@ class ProjectPanel(QWidget):
         
         layout.addWidget(footer)
 
-        # Connect Events
         self.tree.customContextMenuRequested.connect(self.open_context_menu)
         self.tree.itemClicked.connect(self.on_item_click)
         self.tree.itemSelectionChanged.connect(self.update_token_estimate)
@@ -146,6 +184,24 @@ class ProjectPanel(QWidget):
     def browse_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Project Root", os.path.expanduser("~"))
         if folder: self.load_project(folder)
+        
+    def scaffold_project(self):
+        if not self.root_folder:
+            QMessageBox.warning(self, "No Project", "Please browse to a target folder first.")
+            return
+            
+        dialog = ScaffoldDialog(self)
+        if dialog.exec():
+            tree_text = dialog.get_text()
+            if not tree_text.strip():
+                return
+                
+            try:
+                create_project_from_tree(self.root_folder, tree_text)
+                self.reload_tree()
+                QMessageBox.information(self, "Success", "Project structure created successfully!")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to create structure:\n{e}")
 
     def load_project(self, folder):
         self.root_folder = folder
