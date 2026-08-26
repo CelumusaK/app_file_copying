@@ -8,10 +8,10 @@ from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtCore import Qt, pyqtSignal
 
 from tree_builder import build_tree
-from utils import get_recursive_files, FILTER_SETTINGS
+from utils import get_recursive_files, FILTER_SETTINGS, save_settings
 from file_ops import copy_files_to_clipboard, copy_project_tree, read_file_content, create_project_from_tree
 from project_watcher import ProjectWatcher
-from ignore_manager import IgnoreManagerWindow 
+from ignore_manager import AdvancedIgnoreManager, DefaultHiddenDialog
 
 class ScaffoldDialog(QDialog):
     def __init__(self, parent=None):
@@ -116,7 +116,6 @@ class ProjectPanel(QWidget):
         browse_act.triggered.connect(self.browse_folder)
         toolbar.addAction(browse_act)
         
-        # --- NEW SCAFFOLD BUTTON ---
         scaffold_act = QAction("🏗", self)
         scaffold_act.setToolTip("Create Project from Text Tree")
         scaffold_act.triggered.connect(self.scaffold_project)
@@ -128,23 +127,34 @@ class ProjectPanel(QWidget):
         toolbar.addWidget(self.search_bar)
 
         expand_act = QAction("⬇", self)
+        expand_act.setToolTip("Expand All")
         expand_act.triggered.connect(self.tree.expandAll)
         toolbar.addAction(expand_act)
 
-        manage_ignore_act = QAction("🚫", self)
+        manage_ignore_act = QAction("⚙️ Filters", self)
+        manage_ignore_act.setToolTip("Manage Custom Hiding Rules")
         manage_ignore_act.triggered.connect(self.open_ignore_manager)
         toolbar.addAction(manage_ignore_act)
+
+        default_hidden_act = QAction("ℹ️", self)
+        default_hidden_act.setToolTip("View Default Hidden Items")
+        default_hidden_act.triggered.connect(self.show_default_hidden)
+        toolbar.addAction(default_hidden_act)
 
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         toolbar.addWidget(spacer)
 
         self.show_hidden_act = QAction("👁", self)
+        self.show_hidden_act.setToolTip("Toggle Hidden Files")
         self.show_hidden_act.setCheckable(True)
+        # Set initial toggle state based on saved settings
+        self.show_hidden_act.setChecked(FILTER_SETTINGS["show_hidden"])
         self.show_hidden_act.toggled.connect(self.toggle_hidden_files)
         toolbar.addAction(self.show_hidden_act)
 
         close_act = QAction("❌", self)
+        close_act.setToolTip("Close Panel")
         close_act.triggered.connect(lambda: self.close_requested.emit(self))
         toolbar.addAction(close_act)
 
@@ -227,30 +237,42 @@ class ProjectPanel(QWidget):
         path = item.data(0, Qt.ItemDataRole.UserRole)
         if path == self.root_folder: return
 
+        name = item.text(0)
+
         menu = QMenu()
-        hide_act = menu.addAction(f"Hide '{item.text(0)}'")
+        hide_act = menu.addAction(f"Hide '{name}' (Exact Match)")
+        show_act = menu.addAction(f"Always Show '{name}' (Add Exception)")
+        
         action = menu.exec(self.tree.viewport().mapToGlobal(position))
+        
         if action == hide_act:
-            FILTER_SETTINGS["custom_ignored"].add(item.text(0))
+            if name not in FILTER_SETTINGS["rules_exact"]:
+                FILTER_SETTINGS["rules_exact"].append(name)
+            if name in FILTER_SETTINGS["temp_visible"]:
+                FILTER_SETTINGS["temp_visible"].remove(name)
+            save_settings()
+            self.reload_tree()
+            
+        elif action == show_act:
+            if name not in FILTER_SETTINGS["temp_visible"]:
+                FILTER_SETTINGS["temp_visible"].append(name)
+            if name in FILTER_SETTINGS["rules_exact"]:
+                FILTER_SETTINGS["rules_exact"].remove(name)
+            save_settings()
             self.reload_tree()
 
     def open_ignore_manager(self):
-        if not self.root_folder: return
-        dialog = IgnoreManagerWindow(
-            self, self.root_folder, 
-            FILTER_SETTINGS["custom_ignored"],
-            FILTER_SETTINGS["temp_visible"],
-            FILTER_SETTINGS["temp_ignored"]
-        )
+        dialog = AdvancedIgnoreManager(self)
         if dialog.exec():
-            ignored, visible, temp_ignored = dialog.get_final_sets()
-            FILTER_SETTINGS["custom_ignored"] = ignored
-            FILTER_SETTINGS["temp_visible"] = visible
-            FILTER_SETTINGS["temp_ignored"] = temp_ignored
             self.reload_tree()
+
+    def show_default_hidden(self):
+        dialog = DefaultHiddenDialog(self)
+        dialog.exec()
 
     def toggle_hidden_files(self, checked):
         FILTER_SETTINGS["show_hidden"] = checked
+        save_settings() # Save selection state
         self.reload_tree()
 
     def filter_tree(self, text):

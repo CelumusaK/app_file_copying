@@ -1,32 +1,71 @@
 import os
+import json
 from constants import IGNORED, SKIP_DIRS
+
+SETTINGS_FILE = "vibe_settings.json"
 
 FILTER_SETTINGS = {
     "show_hidden": False,
-    "custom_ignored": set(),
-    "temp_visible": set(),
-    "temp_ignored": set(),
+    "rules_exact": [],
+    "rules_startswith": [],
+    "rules_endswith": [],
+    "rules_contains": [],
+    "temp_visible": [], # Exact names to ALWAYS show (Exceptions)
 }
 
+def load_settings():
+    """Load user settings from a local JSON db file."""
+    global FILTER_SETTINGS
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                saved = json.load(f)
+                for key in FILTER_SETTINGS:
+                    if key in saved:
+                        FILTER_SETTINGS[key] = saved[key]
+        except Exception as e:
+            print(f"Error loading config: {e}")
+
+def save_settings():
+    """Save user settings to a local JSON db file."""
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(FILTER_SETTINGS, f, indent=4)
+    except Exception as e:
+        print(f"Error saving config: {e}")
+
+# Load settings on start
+load_settings()
+
 def match_ignore(name, is_dir=False):
+    # 1. Check Exceptions (Always Show)
     if name in FILTER_SETTINGS["temp_visible"]:
         return False
-    
-    if name in FILTER_SETTINGS["temp_ignored"]:
-        return True
-    
-    if name in FILTER_SETTINGS["custom_ignored"]:
-        return True
-
-    if name.startswith("."):
-        if FILTER_SETTINGS["show_hidden"]:
-            if name in {".git", ".idea", ".vscode"}:
-                return True
-            return False
-        else:
+        
+    # 2. Check Global Hidden Toggle
+    if FILTER_SETTINGS["show_hidden"]:
+        if name in {".git", ".idea", ".vscode"}: # Keep extreme core files hidden 
             return True
+        return False
 
-    if is_dir and name in SKIP_DIRS:
+    # 3. Check Custom Rules
+    if name in FILTER_SETTINGS["rules_exact"]: 
+        return True
+    
+    for prefix in FILTER_SETTINGS["rules_startswith"]:
+        if prefix and name.startswith(prefix): return True
+        
+    for suffix in FILTER_SETTINGS["rules_endswith"]:
+        if suffix and name.endswith(suffix): return True
+        
+    for substring in FILTER_SETTINGS["rules_contains"]:
+        if substring and substring in name: return True
+
+    # 4. Check Default Hardcoded Rules (from constants.py)
+    if name.startswith("."): 
+        return True
+        
+    if is_dir and name in SKIP_DIRS: 
         return True
     
     for pattern in IGNORED:

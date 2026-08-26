@@ -1,225 +1,146 @@
 import os
 from PyQt6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QTreeWidget, QTreeWidgetItem, 
-    QLineEdit, QPushButton, QLabel, QComboBox, QStyle, QApplication,
-    QWidget
+    QDialog, QVBoxLayout, QHBoxLayout, QListWidget, 
+    QLineEdit, QPushButton, QLabel, QComboBox
 )
-from PyQt6.QtCore import Qt
-from constants import SKIP_DIRS, IGNORED
+from utils import FILTER_SETTINGS, save_settings
+from constants import IGNORED, SKIP_DIRS
 
-class IgnoreManagerWindow(QDialog):
-    def __init__(self, parent, root_folder, current_ignored_set, temp_visible, temp_ignored):
+class AdvancedIgnoreManager(QDialog):
+    def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Manage Visibility (Mini Explorer)")
-        self.resize(600, 700)
-        self.root_folder = root_folder
-        
-        self.working_ignored = set(current_ignored_set)
-        self.working_temp_visible = set(temp_visible)
-        self.working_temp_ignored = set(temp_ignored)
-        
+        self.setWindowTitle("Manage Visibility Rules")
+        self.resize(500, 500)
         self.setup_ui()
-        self.load_tree()
+        self.load_rules()
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         
-        info = QLabel("Check items to HIDE them from the main explorer.\nUncheck to make them VISIBLE.")
+        info = QLabel("Hide new files based on custom string matching rules.")
         info.setStyleSheet("color: #aaa; font-style: italic;")
         layout.addWidget(info)
 
-        controls_layout = QHBoxLayout()
+        # Input Area
+        add_layout = QHBoxLayout()
+        self.rule_type = QComboBox()
+        self.rule_type.addItems(["Exact Match", "Starts With", "Ends With", "Contains"])
         
-        self.search_bar = QLineEdit()
-        self.search_bar.setPlaceholderText("🔍 Search files...")
-        self.search_bar.textChanged.connect(self.filter_tree)
+        self.rule_input = QLineEdit()
+        self.rule_input.setPlaceholderText("Enter pattern (e.g. _test.py)")
         
-        self.view_combo = QComboBox()
-        self.view_combo.addItems(["View All Files", "Show Only Hidden", "Show Only Visible"])
-        self.view_combo.currentIndexChanged.connect(self.filter_tree)
+        btn_add = QPushButton("Add Rule")
+        btn_add.clicked.connect(self.add_rule)
         
-        controls_layout.addWidget(self.search_bar, 3)
-        controls_layout.addWidget(self.view_combo, 1)
-        layout.addLayout(controls_layout)
+        add_layout.addWidget(self.rule_type)
+        add_layout.addWidget(self.rule_input)
+        add_layout.addWidget(btn_add)
+        layout.addLayout(add_layout)
 
-        self.tree = QTreeWidget()
-        self.tree.setHeaderLabel("Project Files")
-        self.tree.setFont(QApplication.font())
-        self.tree.itemChanged.connect(self.on_item_changed)
-        layout.addWidget(self.tree)
+        # Rule List
+        layout.addWidget(QLabel("Active Hidden Rules:"))
+        self.rules_list = QListWidget()
+        layout.addWidget(self.rules_list)
+        
+        btn_remove = QPushButton("🗑️ Remove Selected Rule")
+        btn_remove.clicked.connect(self.remove_rule)
+        layout.addWidget(btn_remove)
+        
+        # Exception List (temp_visible)
+        layout.addWidget(QLabel("Always Visible (Exceptions):"))
+        self.exceptions_list = QListWidget()
+        layout.addWidget(self.exceptions_list)
+        
+        btn_remove_ex = QPushButton("🗑️ Remove Selected Exception")
+        btn_remove_ex.clicked.connect(self.remove_exception)
+        layout.addWidget(btn_remove_ex)
 
+        # Save and Close
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
-        
-        btn_cancel = QPushButton("Cancel")
-        btn_cancel.clicked.connect(self.reject)
-        btn_cancel.setStyleSheet("background-color: #555; color: white; padding: 8px;")
-        
-        btn_save = QPushButton("💾 Apply Changes")
-        btn_save.clicked.connect(self.accept)
-        btn_save.setStyleSheet("background-color: #2E7D32; color: white; font-weight: bold; padding: 8px 20px;")
-        
-        btn_layout.addWidget(btn_cancel)
-        btn_layout.addWidget(btn_save)
+        btn_close = QPushButton("💾 Save & Apply")
+        btn_close.clicked.connect(self.save_and_close)
+        btn_close.setStyleSheet("background-color: #2E7D32; color: white; font-weight: bold; padding: 8px 20px;")
+        btn_layout.addWidget(btn_close)
         layout.addLayout(btn_layout)
+
+        self.setStyleSheet("""
+            QDialog { background-color: #2b2b2b; color: #e0e0e0; }
+            QListWidget { background-color: #3c3f41; color: #e0e0e0; border: 1px solid #555; }
+            QLineEdit, QComboBox { background-color: #3c3f41; color: #e0e0e0; padding: 5px; border: 1px solid #555; }
+            QPushButton { background-color: #444; color: white; border: 1px solid #555; padding: 5px; }
+            QPushButton:hover { background-color: #555; }
+        """)
+
+    def load_rules(self):
+        for r in FILTER_SETTINGS["rules_exact"]: self.rules_list.addItem(f"[Exact Match] {r}")
+        for r in FILTER_SETTINGS["rules_startswith"]: self.rules_list.addItem(f"[Starts With] {r}")
+        for r in FILTER_SETTINGS["rules_endswith"]: self.rules_list.addItem(f"[Ends With] {r}")
+        for r in FILTER_SETTINGS["rules_contains"]: self.rules_list.addItem(f"[Contains] {r}")
+        
+        for ex in FILTER_SETTINGS["temp_visible"]:
+            self.exceptions_list.addItem(ex)
+
+    def add_rule(self):
+        val = self.rule_input.text().strip()
+        if not val: return
+        rtype = self.rule_type.currentText()
+        self.rules_list.addItem(f"[{rtype}] {val}")
+        self.rule_input.clear()
+
+    def remove_rule(self):
+        item = self.rules_list.currentItem()
+        if item: self.rules_list.takeItem(self.rules_list.row(item))
+
+    def remove_exception(self):
+        item = self.exceptions_list.currentItem()
+        if item: self.exceptions_list.takeItem(self.exceptions_list.row(item))
+
+    def save_and_close(self):
+        FILTER_SETTINGS["rules_exact"] = []
+        FILTER_SETTINGS["rules_startswith"] = []
+        FILTER_SETTINGS["rules_endswith"] = []
+        FILTER_SETTINGS["rules_contains"] = []
+        
+        for i in range(self.rules_list.count()):
+            text = self.rules_list.item(i).text()
+            val = text.split("] ", 1)[1]
+            if "[Exact Match]" in text: FILTER_SETTINGS["rules_exact"].append(val)
+            elif "[Starts With]" in text: FILTER_SETTINGS["rules_startswith"].append(val)
+            elif "[Ends With]" in text: FILTER_SETTINGS["rules_endswith"].append(val)
+            elif "[Contains]" in text: FILTER_SETTINGS["rules_contains"].append(val)
+        
+        FILTER_SETTINGS["temp_visible"] = []
+        for i in range(self.exceptions_list.count()):
+            FILTER_SETTINGS["temp_visible"].append(self.exceptions_list.item(i).text())
+            
+        save_settings()
+        self.accept()
+
+
+class DefaultHiddenDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Default Hidden Files")
+        self.resize(400, 600)
+        layout = QVBoxLayout(self)
+        
+        lbl = QLabel("These items are hidden by default from constants.py:")
+        lbl.setStyleSheet("color: #ccc; font-weight: bold;")
+        layout.addWidget(lbl)
+        
+        list_widget = QListWidget()
+        layout.addWidget(list_widget)
+        
+        combined = sorted(list(IGNORED.union(SKIP_DIRS)))
+        list_widget.addItems(combined)
+        
+        btn = QPushButton("Close")
+        btn.clicked.connect(self.accept)
+        layout.addWidget(btn)
         
         self.setStyleSheet("""
             QDialog { background-color: #2b2b2b; color: #e0e0e0; }
-            QTreeWidget { background-color: #3c3f41; color: #e0e0e0; border: 1px solid #555; }
-            QTreeWidget::item:hover { background-color: #4b6eaf; }
-            QLineEdit, QComboBox { background-color: #3c3f41; color: #e0e0e0; padding: 5px; border: 1px solid #555; }
+            QListWidget { background-color: #3c3f41; color: #e0e0e0; border: 1px solid #555; }
+            QPushButton { background-color: #444; color: white; padding: 5px; }
         """)
-
-    def get_icon(self, is_dir):
-        style = QApplication.style()
-        if is_dir:
-            return style.standardIcon(QStyle.StandardPixmap.SP_DirIcon)
-        return style.standardIcon(QStyle.StandardPixmap.SP_FileIcon)
-
-    def load_tree(self):
-        self.tree.blockSignals(True)
-        self.tree.clear()
-        
-        root_item = QTreeWidgetItem(self.tree, [os.path.basename(self.root_folder)])
-        root_item.setData(0, Qt.ItemDataRole.UserRole, self.root_folder)
-        root_item.setIcon(0, self.get_icon(True))
-        root_item.setExpanded(True)
-        
-        self.recursive_build(root_item, self.root_folder)
-        
-        self.tree.blockSignals(False)
-
-    def recursive_build(self, parent_node, current_path):
-        try:
-            items = sorted(os.listdir(current_path))
-        except PermissionError:
-            return
-
-        dirs = []
-        files = []
-        
-        for item in items:
-            full_path = os.path.join(current_path, item)
-            is_dir = os.path.isdir(full_path)
-            
-            if is_dir and item in SKIP_DIRS:
-                continue
-                
-            if is_dir:
-                dirs.append((item, full_path))
-            else:
-                files.append((item, full_path))
-
-        for name, path in dirs:
-            node = QTreeWidgetItem(parent_node, [name])
-            node.setData(0, Qt.ItemDataRole.UserRole, path)
-            node.setIcon(0, self.get_icon(True))
-            self.set_node_state(node, name)
-            self.recursive_build(node, path)
-
-        for name, path in files:
-            node = QTreeWidgetItem(parent_node, [name])
-            node.setData(0, Qt.ItemDataRole.UserRole, path)
-            node.setIcon(0, self.get_icon(False))
-            self.set_node_state(node, name)
-
-    def is_in_constants(self, name):
-        if name in IGNORED:
-            return True
-        for pattern in IGNORED:
-            if pattern.startswith("*") and name.endswith(pattern[1:]):
-                return True
-        return False
-
-    def set_node_state(self, node, name):
-        node.setFlags(node.flags() | Qt.ItemFlag.ItemIsUserCheckable)
-        
-        in_constants = self.is_in_constants(name)
-        
-        if name in self.working_temp_visible:
-            node.setCheckState(0, Qt.CheckState.Unchecked)
-            node.setForeground(0, Qt.GlobalColor.green)
-        elif name in self.working_temp_ignored:
-            node.setCheckState(0, Qt.CheckState.Checked)
-            node.setForeground(0, Qt.GlobalColor.yellow)
-        elif name in self.working_ignored:
-            node.setCheckState(0, Qt.CheckState.Checked)
-            node.setForeground(0, Qt.GlobalColor.red)
-        elif in_constants:
-            node.setCheckState(0, Qt.CheckState.Checked)
-            node.setForeground(0, Qt.GlobalColor.darkRed)
-        else:
-            node.setCheckState(0, Qt.CheckState.Unchecked)
-            node.setForeground(0, Qt.GlobalColor.lightGray)
-
-    def on_item_changed(self, item, column):
-        name = item.text(0)
-        state = item.checkState(0)
-        in_constants = self.is_in_constants(name)
-        
-        if state == Qt.CheckState.Checked:
-            self.working_temp_visible.discard(name)
-            
-            if in_constants:
-                item.setForeground(0, Qt.GlobalColor.darkRed)
-            else:
-                self.working_ignored.add(name)
-                self.working_temp_ignored.discard(name)
-                item.setForeground(0, Qt.GlobalColor.red)
-        else:
-            self.working_ignored.discard(name)
-            self.working_temp_ignored.discard(name)
-            
-            if in_constants:
-                self.working_temp_visible.add(name)
-                item.setForeground(0, Qt.GlobalColor.green)
-            else:
-                self.working_temp_visible.discard(name)
-                item.setForeground(0, Qt.GlobalColor.lightGray)
-            
-        if self.view_combo.currentIndex() != 0: 
-            self.filter_tree()
-
-    def filter_tree(self):
-        search_text = self.search_bar.text().lower()
-        view_mode = self.view_combo.currentIndex()
-
-        def process_node(node):
-            child_visible = False
-            for i in range(node.childCount()):
-                if process_node(node.child(i)):
-                    child_visible = True
-            
-            name = node.text(0)
-            in_constants = self.is_in_constants(name)
-            
-            is_ignored = False
-            if name in self.working_temp_visible:
-                is_ignored = False
-            elif name in self.working_temp_ignored or name in self.working_ignored or in_constants:
-                is_ignored = True
-            
-            mode_match = True
-            if view_mode == 1 and not is_ignored:
-                mode_match = False
-            elif view_mode == 2 and is_ignored:
-                mode_match = False
-                
-            search_match = True
-            if search_text:
-                search_match = search_text in name.lower()
-            
-            should_show = (mode_match and search_match) or child_visible
-            
-            node.setHidden(not should_show)
-            if should_show and (search_text or view_mode != 0):
-                node.setExpanded(True)
-                
-            return should_show
-
-        root = self.tree.topLevelItem(0)
-        if root:
-            process_node(root)
-
-    def get_final_sets(self):
-        return self.working_ignored, self.working_temp_visible, self.working_temp_ignored

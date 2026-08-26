@@ -1,5 +1,5 @@
 import os
-from PyQt6.QtWidgets import QMainWindow, QWidget, QGridLayout, QMessageBox
+from PyQt6.QtWidgets import QMainWindow, QWidget, QGridLayout
 from project_panel import ProjectPanel
 
 class MainWindow(QMainWindow):
@@ -38,29 +38,47 @@ class MainWindow(QMainWindow):
             self.rearrange_grid()
 
     def rearrange_grid(self):
-        # Detach all
+        # Detach all current widgets from the grid
         for i in reversed(range(self.grid_layout.count())):
-            self.grid_layout.itemAt(i).widget().setParent(None)
+            widget = self.grid_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
 
         count = len(self.project_panels)
         
+        # Reset stretches so they apply correctly to the new setup
+        self.grid_layout.setRowStretch(0, 0)
+        self.grid_layout.setRowStretch(1, 0)
+        self.grid_layout.setColumnStretch(0, 0)
+        self.grid_layout.setColumnStretch(1, 0)
+
         if count == 1:
             self.grid_layout.addWidget(self.project_panels[0], 0, 0)
+            self.grid_layout.setRowStretch(0, 1)
+            self.grid_layout.setColumnStretch(0, 1)
+
         elif count == 2:
             self.grid_layout.addWidget(self.project_panels[0], 0, 0)
             self.grid_layout.addWidget(self.project_panels[1], 0, 1)
+            self.grid_layout.setRowStretch(0, 1)
+            self.grid_layout.setColumnStretch(0, 1) # Left half
+            self.grid_layout.setColumnStretch(1, 1) # Right half
+
         elif count == 3:
-            self.grid_layout.addWidget(self.project_panels[0], 0, 0, 2, 1) # Full height left
-            self.grid_layout.addWidget(self.project_panels[1], 0, 1, 1, 1) # Top right
-            self.grid_layout.addWidget(self.project_panels[2], 1, 1, 1, 1) # Bottom right
+            self.grid_layout.addWidget(self.project_panels[0], 0, 0, 2, 1)
+            self.grid_layout.addWidget(self.project_panels[1], 0, 1)
+            self.grid_layout.addWidget(self.project_panels[2], 1, 1)
+            self.grid_layout.setRowStretch(0, 1)
+            self.grid_layout.setRowStretch(1, 1)
+            self.grid_layout.setColumnStretch(0, 1)
+            self.grid_layout.setColumnStretch(1, 1)
+
         elif count == 4:
             self.grid_layout.addWidget(self.project_panels[0], 0, 0)
             self.grid_layout.addWidget(self.project_panels[1], 0, 1)
             self.grid_layout.addWidget(self.project_panels[2], 1, 0)
             self.grid_layout.addWidget(self.project_panels[3], 1, 1)
-
-        # Ensure stretching is balanced
-        self.grid_layout.setRowStretch(0, 1)
-        self.grid_layout.setRowStretch(1, 1)
-        self.grid_layout.setColumnStretch(0, 1)
-        self.grid_layout.setColumnStretch(1, 1)
+            self.grid_layout.setRowStretch(0, 1)
+            self.grid_layout.setRowStretch(1, 1)
+            self.grid_layout.setColumnStretch(0, 1)
+            self.grid_layout.setColumnStretch(1, 1)
