@@ -178,7 +178,7 @@ class ProjectPanel(QWidget):
         f_layout.addStretch()
         
         btn_copy_tree = QPushButton("Tree")
-        btn_copy_tree.clicked.connect(lambda: copy_project_tree(self, self.root_folder))
+        btn_copy_tree.clicked.connect(self.copy_selected_tree)
         f_layout.addWidget(btn_copy_tree)
         
         btn_copy_files = QPushButton("Content")
@@ -321,17 +321,37 @@ class ProjectPanel(QWidget):
         token_str = f"{tokens/1000:.1f}k" if tokens > 1000 else str(tokens)
         self.token_label.setText(f"{file_count} selected (~{token_str} tokens)")
 
+    def copy_selected_tree(self):
+        target_folder = self.root_folder
+        selected_items = self.tree.selectedItems()
+        
+        if selected_items:
+            # If a selection exists, grab the first one
+            path = selected_items[0].data(0, Qt.ItemDataRole.UserRole)
+            if os.path.isdir(path):
+                target_folder = path
+            else:
+                target_folder = os.path.dirname(path)
+                
+        if target_folder:
+            copy_project_tree(self, target_folder)
+
     def gather_and_copy_files(self):
         selected_items = self.tree.selectedItems()
-        if not selected_items: return
+        if not selected_items: 
+            return
+            
         files_to_copy = set()
         for item in selected_items:
             path = item.data(0, Qt.ItemDataRole.UserRole)
-            if os.path.isfile(path): files_to_copy.add(path)
-            elif os.path.isdir(path): files_to_copy.update(get_recursive_files(path))
+            if os.path.isfile(path): 
+                files_to_copy.add(path)
+            elif os.path.isdir(path): 
+                files_to_copy.update(get_recursive_files(path))
+                
         if files_to_copy:
             copy_files_to_clipboard(self, files_to_copy, self.root_folder)
-
+        
     def handle_file_change(self, path):
         if path == self.current_preview_path and os.path.exists(path):
             self.viewer.setPlainText(read_file_content(path))

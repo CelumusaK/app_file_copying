@@ -1,0 +1,10 @@
+{
+    "show_hidden": false,
+    "rules_exact": [
+        "android"
+    ],
+    "rules_startswith": [],
+    "rules_endswith": [],
+    "rules_contains": [],
+    "temp_visible": []
+}

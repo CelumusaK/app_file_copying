@@ -32,3 +32,6 @@ Make sure you have **Python 3.8+** installed on your system.
    # macOS/Linux
    python3 -m venv venv
    source venv/bin/activate
+
+to build the final app use:
+pyinstaller twb_project_explorer.spec --noconfirm --clean
